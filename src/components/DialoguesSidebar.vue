@@ -86,6 +86,10 @@ async function loadDialogues(): Promise<void> {
   }
 }
 
+defineExpose({
+  reload: loadDialogues,
+})
+
 function openDialogue(id: number): void {
   router.push({ name: 'dialogue', params: { id } })
 }

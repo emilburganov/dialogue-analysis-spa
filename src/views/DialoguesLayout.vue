@@ -1,13 +1,18 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, provide, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import AppLayout from '@/components/AppLayout.vue'
 import DialoguePanel from '@/components/DialoguePanel.vue'
 import DialoguesSidebar from '@/components/DialoguesSidebar.vue'
 
 const route = useRoute()
+const sidebarRef = ref<InstanceType<typeof DialoguesSidebar> | null>(null)
 
 const hasSelectedDialogue = computed(() => route.name === 'dialogue')
+
+provide('reloadDialoguesList', async () => {
+  await sidebarRef.value?.reload()
+})
 </script>
 
 <template>
@@ -15,7 +20,7 @@ const hasSelectedDialogue = computed(() => route.name === 'dialogue')
     <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div class="grid min-h-[70vh] lg:grid-cols-[360px_minmax(0,1fr)]">
         <div :class="hasSelectedDialogue ? 'hidden lg:block' : 'block'">
-          <DialoguesSidebar />
+          <DialoguesSidebar ref="sidebarRef" />
         </div>
 
         <div

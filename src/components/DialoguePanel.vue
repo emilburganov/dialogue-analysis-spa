@@ -1,28 +1,31 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, inject, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { deleteDialogue, fetchDialogue, sendMessage } from '@/api/dialogues'
+import { deleteDialogue, fetchDialogue, sendMessage, updateDialogueResult } from '@/api/dialogues'
 import DialogueAnalysisPanel from '@/components/DialogueAnalysisPanel.vue'
 import DialogueResultBadge from '@/components/DialogueResultBadge.vue'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import MessageBubble from '@/components/MessageBubble.vue'
 import { useAuthStore } from '@/stores/auth'
-import type { DialogueDetail } from '@/types/dialogue'
+import type { DialogueDetail, DialogueResult } from '@/types/dialogue'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const reloadDialoguesList = inject<(() => Promise<void>) | undefined>('reloadDialoguesList')
 
 const dialogue = ref<DialogueDetail | null>(null)
 const loading = ref(false)
 const sending = ref(false)
 const deleting = ref(false)
+const updatingResult = ref(false)
 const error = ref<string | null>(null)
 const messageBody = ref('')
 
 const dialogueId = computed(() => Number(route.params.id))
 
 const canViewResult = computed(() => auth.user?.role !== 'client')
+const canManageResult = computed(() => auth.user?.role === 'admin')
 const canViewDeletedStatus = computed(() => auth.user?.role !== 'client')
 const canDeleteDialogue = computed(() => auth.user?.role === 'client')
 
@@ -98,6 +101,26 @@ async function handleSendMessage(): Promise<void> {
       : 'Не удалось отправить сообщение.'
   } finally {
     sending.value = false
+  }
+}
+
+async function handleResultChange(result: DialogueResult): Promise<void> {
+  if (!dialogue.value || updatingResult.value || dialogue.value.result === result) {
+    return
+  }
+
+  updatingResult.value = true
+  error.value = null
+
+  try {
+    dialogue.value = await updateDialogueResult(dialogue.value.id, result)
+    await reloadDialoguesList?.()
+  } catch (exception) {
+    error.value = exception instanceof Error
+      ? exception.message
+      : 'Не удалось изменить результат диалога.'
+  } finally {
+    updatingResult.value = false
   }
 }
 
@@ -193,8 +216,36 @@ function goBackMobile(): void {
               {{ deleting ? 'Удаление...' : 'Удалить диалог' }}
             </button>
 
+            <div
+              v-if="canManageResult && dialogue.result"
+              class="inline-flex rounded-xl border border-slate-200 bg-slate-50 p-1"
+            >
+              <button
+                type="button"
+                :disabled="updatingResult"
+                class="rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60"
+                :class="dialogue.result === 'bought'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-600 hover:bg-white'"
+                @click="handleResultChange('bought')"
+              >
+                Купил
+              </button>
+              <button
+                type="button"
+                :disabled="updatingResult"
+                class="rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-60"
+                :class="dialogue.result === 'not_bought'
+                  ? 'bg-rose-600 text-white shadow-sm'
+                  : 'text-slate-600 hover:bg-white'"
+                @click="handleResultChange('not_bought')"
+              >
+                Не купил
+              </button>
+            </div>
+
             <DialogueResultBadge
-              v-if="canViewResult && dialogue.result && dialogue.result_label"
+              v-else-if="canViewResult && dialogue.result && dialogue.result_label"
               :result="dialogue.result"
               :label="dialogue.result_label"
             />

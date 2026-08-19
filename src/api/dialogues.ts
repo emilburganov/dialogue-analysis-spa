@@ -1,6 +1,6 @@
 import { apiRequest } from '@/api/client'
 import type { DialogueAnalysisResponse } from '@/types/analysis'
-import type { DialogueDetail, DialoguesResponse, Message } from '@/types/dialogue'
+import type { DialogueDetail, DialogueResult, DialoguesResponse, Message } from '@/types/dialogue'
 
 export function fetchDialogues(): Promise<DialoguesResponse> {
   return apiRequest<DialoguesResponse>('/dialogues')
@@ -20,6 +20,13 @@ export function sendMessage(dialogueId: number, body: string): Promise<Message> 
   return apiRequest<Message>(`/dialogues/${dialogueId}/messages`, {
     method: 'POST',
     body: { body },
+  })
+}
+
+export function updateDialogueResult(dialogueId: number, result: DialogueResult): Promise<DialogueDetail> {
+  return apiRequest<DialogueDetail>(`/dialogues/${dialogueId}/result`, {
+    method: 'PATCH',
+    body: { result },
   })
 }
 
