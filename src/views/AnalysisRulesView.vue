@@ -1,11 +1,20 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, ref, shallowRef, watch } from 'vue'
 import { RouterLink } from 'vue-router'
+import { ErrorMessage, Field, useForm } from 'vee-validate'
 import * as analysisRulesApi from '@/api/analysisRules'
+import AnalysisRuleEditModal from '@/components/AnalysisRuleEditModal.vue'
 import AppLayout from '@/components/AppLayout.vue'
+import KeywordsChipsInput from '@/components/KeywordsChipsInput.vue'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
+import {
+  buildCreateRuleSchema,
+  buildDefaultCreateFormValues,
+  parseKeywords,
+} from '@/schemas/analysisRuleSchema'
 import type { AnalysisRule, AnalysisRulePayload, AnalysisRuleType } from '@/types/analysisRule'
 import { severityOptions } from '@/types/analysisRule'
+import { applyApiFieldErrors } from '@/utils/apiValidationError'
 
 const rules = ref<AnalysisRule[]>([])
 const types = ref<AnalysisRuleType[]>([])
@@ -13,66 +22,49 @@ const loading = ref(true)
 const saving = ref(false)
 const error = ref<string | null>(null)
 const showCreateForm = ref(false)
-const editingRuleId = ref<number | null>(null)
+const editingRule = ref<AnalysisRule | null>(null)
+const createRuleConfigSchema = ref<AnalysisRuleType['config_schema']>([])
+const createSubmitAttempted = ref(false)
+const createValidationSchema = shallowRef(buildCreateRuleSchema([]))
 
-const createForm = reactive({
-  slug: '',
-  rule_type: '',
-  name: '',
-  description: '',
-  default_severity: 'medium' as AnalysisRulePayload['default_severity'],
-  is_enabled: true,
-  config: {} as Record<string, unknown>,
+watch(createRuleConfigSchema, (schema) => {
+  createValidationSchema.value = buildCreateRuleSchema(schema)
 })
 
-const editForm = reactive({
-  name: '',
-  description: '',
-  default_severity: 'medium' as AnalysisRulePayload['default_severity'],
-  is_enabled: true,
-  config: {} as Record<string, unknown>,
+const {
+  values: createValues,
+  errors: createErrors,
+  handleSubmit: submitCreateForm,
+  resetForm: resetCreateFormState,
+  setFieldError: setCreateFieldError,
+} = useForm({
+  validationSchema: createValidationSchema,
+  initialValues: buildDefaultCreateFormValues(undefined),
+  validateOnMount: false,
 })
 
-const selectedCreateType = computed(() => types.value.find((type) => type.type === createForm.rule_type) ?? null)
-const editingRule = computed(() => rules.value.find((rule) => rule.id === editingRuleId.value) ?? null)
-const editingType = computed(() => {
+const editingRuleType = computed(() => {
   if (!editingRule.value) {
     return null
   }
 
-  return types.value.find((type) => type.type === editingRule.value?.rule_type) ?? null
+  return types.value.find((type) => type.id === editingRule.value?.rule_type_id) ?? null
 })
 
-function configValueToInput(value: unknown): string {
-  if (Array.isArray(value)) {
-    return value.join(', ')
-  }
+const selectedCreateType = computed(() =>
+  types.value.find((type) => type.id === createValues.rule_type_id) ?? null,
+)
 
-  if (value === null || value === undefined) {
-    return ''
-  }
+const showCreateValidation = computed(() => createSubmitAttempted.value)
 
-  return String(value)
+function hasCreateFieldError(field: string): boolean {
+  return showCreateValidation.value && Boolean(createErrors.value[field as keyof typeof createErrors.value])
 }
 
-function buildConfigFromSchema(
-  schema: AnalysisRuleType['config_schema'],
-  source: Record<string, unknown> | null | undefined,
-): Record<string, unknown> {
-  const config: Record<string, unknown> = {}
-
-  for (const field of schema) {
-    const existing = source?.[field.key]
-
-    if (existing !== undefined) {
-      config[field.key] = existing
-      continue
-    }
-
-    config[field.key] = field.default ?? ''
-  }
-
-  return config
+function applyCreateApiErrors(err: unknown): boolean {
+  return applyApiFieldErrors(err, (field, message) => {
+    setCreateFieldError(field as keyof typeof createValues, message)
+  })
 }
 
 async function loadData(): Promise<void> {
@@ -88,10 +80,10 @@ async function loadData(): Promise<void> {
     rules.value = rulesResponse.data
     types.value = typesResponse.data
 
-    if (!createForm.rule_type && types.value.length > 0) {
-      createForm.rule_type = types.value[0].type
-      createForm.default_severity = types.value[0].default_severity
-      createForm.config = buildConfigFromSchema(types.value[0].config_schema, null)
+    if (!createValues.rule_type_id && types.value.length > 0) {
+      const firstType = types.value[0]
+      createRuleConfigSchema.value = firstType.config_schema
+      resetCreateFormState({ values: buildDefaultCreateFormValues(firstType) })
     }
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Не удалось загрузить правила.'
@@ -102,14 +94,23 @@ async function loadData(): Promise<void> {
 
 function resetCreateForm(): void {
   const firstType = types.value[0]
+  createRuleConfigSchema.value = firstType?.config_schema ?? []
+  createSubmitAttempted.value = false
+  resetCreateFormState({
+    values: buildDefaultCreateFormValues(firstType),
+    errors: {},
+    touched: {},
+  })
+}
 
-  createForm.slug = ''
-  createForm.rule_type = firstType?.type ?? ''
-  createForm.name = firstType?.name ?? ''
-  createForm.description = firstType?.description ?? ''
-  createForm.default_severity = firstType?.default_severity ?? 'medium'
-  createForm.is_enabled = true
-  createForm.config = buildConfigFromSchema(firstType?.config_schema ?? [], null)
+function toggleCreateForm(): void {
+  if (showCreateForm.value) {
+    showCreateForm.value = false
+    return
+  }
+
+  resetCreateForm()
+  showCreateForm.value = true
 }
 
 function onCreateTypeChange(): void {
@@ -119,14 +120,13 @@ function onCreateTypeChange(): void {
     return
   }
 
-  createForm.name = type.name
-  createForm.description = type.description
-  createForm.default_severity = type.default_severity
-  createForm.config = buildConfigFromSchema(type.config_schema, null)
-
-  if (!createForm.slug) {
-    createForm.slug = type.type
-  }
+  createRuleConfigSchema.value = type.config_schema
+  createSubmitAttempted.value = false
+  resetCreateFormState({
+    values: buildDefaultCreateFormValues(type),
+    errors: {},
+    touched: {},
+  })
 }
 
 function startEdit(rule: AnalysisRule): void {
@@ -134,34 +134,32 @@ function startEdit(rule: AnalysisRule): void {
     return
   }
 
-  editingRuleId.value = rule.id
-  editForm.name = rule.name
-  editForm.description = rule.description ?? ''
-  editForm.default_severity = rule.default_severity
-  editForm.is_enabled = rule.is_enabled
-  editForm.config = buildConfigFromSchema(
-    types.value.find((type) => type.type === rule.rule_type)?.config_schema ?? [],
-    rule.config,
-  )
+  editingRule.value = rule
 }
 
 function cancelEdit(): void {
-  editingRuleId.value = null
+  editingRule.value = null
 }
 
-async function handleCreate(): Promise<void> {
+function onRuleSaved(updatedRule: AnalysisRule): void {
+  rules.value = rules.value
+    .map((rule) => (rule.id === updatedRule.id ? updatedRule : rule))
+    .sort((a, b) => a.name.localeCompare(b.name))
+  cancelEdit()
+}
+
+const handleCreate = submitCreateForm(async (formValues) => {
   saving.value = true
   error.value = null
 
   try {
     const payload: AnalysisRulePayload = {
-      slug: createForm.slug,
-      rule_type: createForm.rule_type,
-      name: createForm.name,
-      description: createForm.description || null,
-      default_severity: createForm.default_severity,
-      is_enabled: createForm.is_enabled,
-      config: createForm.config,
+      rule_type_id: formValues.rule_type_id,
+      name: formValues.name,
+      description: formValues.description,
+      default_severity: formValues.default_severity,
+      is_enabled: true,
+      config: formValues.config,
     }
 
     const response = await analysisRulesApi.createAnalysisRule(payload)
@@ -169,36 +167,13 @@ async function handleCreate(): Promise<void> {
     showCreateForm.value = false
     resetCreateForm()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Не удалось создать правило.'
-  } finally {
-    saving.value = false
-  }
-}
-
-async function handleUpdate(ruleId: number): Promise<void> {
-  saving.value = true
-  error.value = null
-
-  try {
-    const payload: AnalysisRulePayload = {
-      name: editForm.name,
-      description: editForm.description || null,
-      default_severity: editForm.default_severity,
-      is_enabled: editForm.is_enabled,
-      config: editForm.config,
+    if (!applyCreateApiErrors(err)) {
+      error.value = err instanceof Error ? err.message : 'Не удалось создать правило.'
     }
-
-    const response = await analysisRulesApi.updateAnalysisRule(ruleId, payload)
-    rules.value = rules.value
-      .map((rule) => (rule.id === ruleId ? response.data : rule))
-      .sort((a, b) => a.name.localeCompare(b.name))
-    cancelEdit()
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Не удалось сохранить правило.'
   } finally {
     saving.value = false
   }
-}
+})
 
 async function handleToggle(rule: AnalysisRule): Promise<void> {
   if (rule.is_system) {
@@ -230,7 +205,7 @@ async function handleDelete(rule: AnalysisRule): Promise<void> {
     await analysisRulesApi.deleteAnalysisRule(rule.id)
     rules.value = rules.value.filter((item) => item.id !== rule.id)
 
-    if (editingRuleId.value === rule.id) {
+    if (editingRule.value?.id === rule.id) {
       cancelEdit()
     }
   } catch (err) {
@@ -261,7 +236,7 @@ onMounted(() => {
       <button
         type="button"
         class="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
-        @click="showCreateForm = !showCreateForm"
+        @click="toggleCreateForm"
       >
         {{ showCreateForm ? 'Скрыть форму' : 'Добавить правило' }}
       </button>
@@ -282,66 +257,71 @@ onMounted(() => {
         Новое правило
       </h2>
 
-      <form class="grid gap-4 md:grid-cols-2" @submit.prevent="handleCreate">
-        <label class="block">
-          <span class="mb-1 block text-sm font-medium text-slate-700">Тип правила</span>
-          <select
-            v-model="createForm.rule_type"
-            class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-            @change="onCreateTypeChange"
-          >
-            <option v-for="type in types" :key="type.type" :value="type.type">
-              {{ type.name }}
-            </option>
-          </select>
-        </label>
+      <div
+        v-if="showCreateValidation && Object.keys(createErrors).length > 0"
+        class="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+      >
+        Исправьте ошибки в форме.
+      </div>
 
-        <label class="block">
-          <span class="mb-1 block text-sm font-medium text-slate-700">Код (slug)</span>
-          <input
-            v-model="createForm.slug"
-            type="text"
-            class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-            placeholder="slow_response_strict"
-            required
-          >
-        </label>
+      <form class="grid gap-4 md:grid-cols-2" @submit.prevent="createSubmitAttempted = true; handleCreate($event)">
+        <Field name="rule_type_id" v-slot="{ field }">
+          <label class="block">
+            <span class="mb-1 block text-sm font-medium text-slate-700">Тип правила:</span>
+            <select
+              v-bind="field"
+              class="w-full rounded-xl border px-3 py-2 text-sm"
+              :class="hasCreateFieldError('rule_type_id') ? 'border-red-300' : 'border-slate-300'"
+              @change="onCreateTypeChange"
+            >
+              <option v-for="type in types" :key="type.id" :value="type.id">
+                {{ type.name }}
+              </option>
+            </select>
+            <ErrorMessage v-if="showCreateValidation" name="rule_type_id" class="mt-1 block text-xs text-red-600" />
+          </label>
+        </Field>
 
-        <label class="block md:col-span-2">
-          <span class="mb-1 block text-sm font-medium text-slate-700">Название</span>
-          <input
-            v-model="createForm.name"
-            type="text"
-            class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-            required
-          >
-        </label>
+        <Field name="name" v-slot="{ field }">
+          <label class="block md:col-span-2">
+            <span class="mb-1 block text-sm font-medium text-slate-700">Название:</span>
+            <input
+              v-bind="field"
+              type="text"
+              class="w-full rounded-xl border px-3 py-2 text-sm"
+              :class="hasCreateFieldError('name') ? 'border-red-300' : 'border-slate-300'"
+            >
+            <ErrorMessage v-if="showCreateValidation" name="name" class="mt-1 block text-xs text-red-600" />
+          </label>
+        </Field>
 
-        <label class="block md:col-span-2">
-          <span class="mb-1 block text-sm font-medium text-slate-700">Описание</span>
-          <textarea
-            v-model="createForm.description"
-            rows="2"
-            class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-          />
-        </label>
+        <Field name="description" v-slot="{ field }">
+          <label class="block md:col-span-2">
+            <span class="mb-1 block text-sm font-medium text-slate-700">Описание:</span>
+            <textarea
+              v-bind="field"
+              rows="2"
+              class="w-full rounded-xl border px-3 py-2 text-sm"
+              :class="hasCreateFieldError('description') ? 'border-red-300' : 'border-slate-300'"
+            />
+            <ErrorMessage v-if="showCreateValidation" name="description" class="mt-1 block text-xs text-red-600" />
+          </label>
+        </Field>
 
-        <label class="block">
-          <span class="mb-1 block text-sm font-medium text-slate-700">Критичность</span>
-          <select
-            v-model="createForm.default_severity"
-            class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-          >
-            <option v-for="option in severityOptions" :key="option.value" :value="option.value">
-              {{ option.label }}
-            </option>
-          </select>
-        </label>
-
-        <label class="flex items-center gap-2 self-end">
-          <input v-model="createForm.is_enabled" type="checkbox" class="rounded border-slate-300">
-          <span class="text-sm text-slate-700">Включено</span>
-        </label>
+        <Field name="default_severity" v-slot="{ field }">
+          <label class="block md:col-span-2">
+            <span class="mb-1 block text-sm font-medium text-slate-700">Критичность:</span>
+            <select
+              v-bind="field"
+              class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+            >
+              <option v-for="option in severityOptions" :key="option.value" :value="option.value">
+                {{ option.label }}
+              </option>
+            </select>
+            <ErrorMessage v-if="showCreateValidation" name="default_severity" class="mt-1 block text-xs text-red-600" />
+          </label>
+        </Field>
 
         <template v-if="selectedCreateType">
           <label
@@ -350,20 +330,32 @@ onMounted(() => {
             class="block md:col-span-2"
           >
             <span class="mb-1 block text-sm font-medium text-slate-700">{{ field.label }}</span>
-            <input
+            <Field
               v-if="field.type === 'integer'"
-              v-model.number="createForm.config[field.key]"
-              type="number"
-              :min="field.min ?? 1"
-              class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
+              :name="`config.${field.key}`"
+              v-slot="{ value, handleChange }"
             >
-            <textarea
-              v-else
-              :value="configValueToInput(createForm.config[field.key])"
-              rows="2"
-              class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-              @input="createForm.config[field.key] = ($event.target as HTMLTextAreaElement).value"
-            />
+              <input
+                type="number"
+                :value="value ?? ''"
+                :min="field.min ?? 1"
+                class="w-full rounded-xl border px-3 py-2 text-sm"
+                :class="hasCreateFieldError(`config.${field.key}`) ? 'border-red-300' : 'border-slate-300'"
+                @input="handleChange(($event.target as HTMLInputElement).value === '' ? undefined : Number(($event.target as HTMLInputElement).value))"
+              >
+            </Field>
+            <Field
+              v-else-if="field.type === 'keywords'"
+              :name="`config.${field.key}`"
+              v-slot="{ value, handleChange }"
+            >
+              <KeywordsChipsInput
+                :model-value="parseKeywords(value)"
+                :invalid="hasCreateFieldError(`config.${field.key}`)"
+                @update:model-value="handleChange"
+              />
+            </Field>
+            <ErrorMessage v-if="showCreateValidation" :name="`config.${field.key}`" class="mt-1 block text-xs text-red-600" />
           </label>
         </template>
 
@@ -399,7 +391,6 @@ onMounted(() => {
             <tr v-for="rule in rules" :key="rule.id">
               <td class="px-4 py-4 align-top">
                 <p class="font-medium text-slate-900">{{ rule.name }}</p>
-                <p class="mt-1 text-xs text-slate-500">{{ rule.slug }}</p>
                 <span
                   v-if="rule.is_system"
                   class="mt-2 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600"
@@ -456,111 +447,13 @@ onMounted(() => {
       </div>
     </div>
 
-    <div
+    <AnalysisRuleEditModal
       v-if="editingRule"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"
-      @click.self="cancelEdit"
-    >
-      <div class="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
-        <div class="mb-4 flex items-start justify-between gap-4">
-          <div>
-            <h2 class="text-lg font-semibold text-slate-900">
-              Редактирование: {{ editingRule.name }}
-            </h2>
-            <p class="mt-1 text-sm text-slate-500">
-              {{ editingRule.type_name }} · {{ editingRule.slug }}
-            </p>
-          </div>
-          <button
-            type="button"
-            class="rounded-lg px-2 py-1 text-slate-500 transition hover:bg-slate-100"
-            @click="cancelEdit"
-          >
-            ✕
-          </button>
-        </div>
-
-        <form class="grid gap-4" @submit.prevent="handleUpdate(editingRule.id)">
-          <label class="block">
-            <span class="mb-1 block text-sm font-medium text-slate-700">Название</span>
-            <input
-              v-model="editForm.name"
-              type="text"
-              class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-              required
-            >
-          </label>
-
-          <label class="block">
-            <span class="mb-1 block text-sm font-medium text-slate-700">Описание</span>
-            <textarea
-              v-model="editForm.description"
-              rows="3"
-              class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-            />
-          </label>
-
-          <div class="grid gap-4 md:grid-cols-2">
-            <label class="block">
-              <span class="mb-1 block text-sm font-medium text-slate-700">Критичность</span>
-              <select
-                v-model="editForm.default_severity"
-                class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-              >
-                <option v-for="option in severityOptions" :key="option.value" :value="option.value">
-                  {{ option.label }}
-                </option>
-              </select>
-            </label>
-
-            <label class="flex items-center gap-2 self-end">
-              <input v-model="editForm.is_enabled" type="checkbox" class="rounded border-slate-300">
-              <span class="text-sm text-slate-700">Включено</span>
-            </label>
-          </div>
-
-          <template v-if="editingType">
-            <label
-              v-for="field in editingType.config_schema"
-              :key="field.key"
-              class="block"
-            >
-              <span class="mb-1 block text-sm font-medium text-slate-700">{{ field.label }}</span>
-              <input
-                v-if="field.type === 'integer'"
-                v-model.number="editForm.config[field.key]"
-                type="number"
-                :min="field.min ?? 1"
-                class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-              >
-              <textarea
-                v-else
-                :value="configValueToInput(editForm.config[field.key])"
-                rows="3"
-                class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-                @input="editForm.config[field.key] = ($event.target as HTMLTextAreaElement).value"
-              />
-            </label>
-          </template>
-
-          <div class="flex justify-end gap-3">
-            <button
-              type="button"
-              class="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
-              @click="cancelEdit"
-            >
-              Отмена
-            </button>
-            <button
-              type="submit"
-              class="rounded-xl bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-60"
-              :disabled="saving"
-            >
-              Сохранить
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+      :key="editingRule.id"
+      :rule="editingRule"
+      :rule-type="editingRuleType"
+      @saved="onRuleSaved"
+      @cancel="cancelEdit"
+    />
   </AppLayout>
 </template>

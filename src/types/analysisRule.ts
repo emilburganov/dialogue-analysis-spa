@@ -9,7 +9,7 @@ export interface AnalysisRuleConfigField {
 }
 
 export interface AnalysisRuleType {
-  type: string
+  id: number
   name: string
   description: string
   default_severity: AnalysisSeverity
@@ -18,10 +18,9 @@ export interface AnalysisRuleType {
 
 export interface AnalysisRule {
   id: number
-  slug: string
-  rule_type: string
+  rule_type_id: number
   name: string
-  description: string | null
+  description: string
   default_severity: AnalysisSeverity
   default_severity_label: string
   is_enabled: boolean
@@ -32,10 +31,9 @@ export interface AnalysisRule {
 }
 
 export interface AnalysisRulePayload {
-  slug?: string
-  rule_type?: string
+  rule_type_id?: number
   name: string
-  description?: string | null
+  description: string
   default_severity?: AnalysisSeverity
   is_enabled?: boolean
   config?: Record<string, unknown>

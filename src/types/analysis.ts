@@ -2,7 +2,7 @@ export type AnalysisSeverity = 'high' | 'medium' | 'low'
 
 export interface AnalysisEvent {
   id: number
-  rule_slug: string
+  analysis_rule_id: number
   rule_name: string
   severity: AnalysisSeverity
   severity_label: string

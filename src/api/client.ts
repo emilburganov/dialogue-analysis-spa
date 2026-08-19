@@ -1,4 +1,5 @@
 import type { ApiError } from '@/types/auth'
+import { createApiValidationError } from '@/utils/apiValidationError'
 
 const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000/api'
 const TOKEN_KEY = 'auth_token'
@@ -44,8 +45,13 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
   })
 
   if (!response.ok) {
-    const error = (await response.json().catch(() => null)) as ApiError | null
-    throw new Error(error?.message ?? 'Произошла ошибка при выполнении запроса.')
+    const errorPayload = (await response.json().catch(() => null)) as ApiError | null
+
+    if (response.status === 422 && errorPayload?.errors) {
+      throw createApiValidationError(errorPayload)
+    }
+
+    throw new Error(errorPayload?.message ?? 'Произошла ошибка при выполнении запроса.')
   }
 
   if (response.status === 204) {
