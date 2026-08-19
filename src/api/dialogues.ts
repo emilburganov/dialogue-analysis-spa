@@ -1,4 +1,5 @@
 import { apiRequest } from '@/api/client'
+import type { DialogueAnalysisResponse } from '@/types/analysis'
 import type { DialogueDetail, DialoguesResponse, Message } from '@/types/dialogue'
 
 export function fetchDialogues(): Promise<DialoguesResponse> {
@@ -26,4 +27,8 @@ export function deleteDialogue(dialogueId: number): Promise<void> {
   return apiRequest<void>(`/dialogues/${dialogueId}`, {
     method: 'DELETE',
   })
+}
+
+export function fetchDialogueAnalysis(dialogueId: number): Promise<DialogueAnalysisResponse> {
+  return apiRequest<DialogueAnalysisResponse>(`/dialogues/${dialogueId}/analysis`)
 }

@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { deleteDialogue, fetchDialogue, sendMessage } from '@/api/dialogues'
+import DialogueAnalysisPanel from '@/components/DialogueAnalysisPanel.vue'
 import DialogueResultBadge from '@/components/DialogueResultBadge.vue'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import MessageBubble from '@/components/MessageBubble.vue'
@@ -207,6 +208,11 @@ function goBackMobile(): void {
           Клиент удалил этот диалог. Отправка сообщений клиенту недоступна.
         </div>
       </header>
+
+      <DialogueAnalysisPanel
+        v-if="canViewResult && dialogue"
+        :dialogue-id="dialogue.id"
+      />
 
       <div class="flex-1 space-y-4 overflow-y-auto px-4 py-6 sm:px-6">
         <MessageBubble

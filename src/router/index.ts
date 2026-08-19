@@ -27,6 +27,12 @@ const router = createRouter({
         },
       ],
     },
+    {
+      path: '/analysis-rules',
+      name: 'analysis-rules',
+      component: () => import('@/views/AnalysisRulesView.vue'),
+      meta: { requiresAuth: true, requiresAdmin: true },
+    },
   ],
 })
 
@@ -42,6 +48,10 @@ router.beforeEach(async (to) => {
   }
 
   if (to.meta.guest && auth.isAuthenticated) {
+    return { name: 'dialogues' }
+  }
+
+  if (to.meta.requiresAdmin && auth.user?.role !== 'admin') {
     return { name: 'dialogues' }
   }
 

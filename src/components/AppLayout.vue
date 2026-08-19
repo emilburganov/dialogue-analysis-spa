@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { useRouter } from 'vue-router'
+import { computed } from 'vue'
+import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
 defineProps<{
@@ -8,6 +9,8 @@ defineProps<{
 
 const auth = useAuthStore()
 const router = useRouter()
+
+const isAdmin = computed(() => auth.user?.role === 'admin')
 
 async function handleLogout(): Promise<void> {
   await auth.logout()
@@ -29,6 +32,22 @@ async function handleLogout(): Promise<void> {
         </div>
 
         <div v-if="auth.user" class="flex items-center gap-4">
+          <nav v-if="isAdmin" class="hidden items-center gap-3 sm:flex">
+            <RouterLink
+              to="/"
+              class="text-sm font-medium text-slate-600 transition hover:text-slate-900"
+              active-class="text-blue-600"
+            >
+              Диалоги
+            </RouterLink>
+            <RouterLink
+              to="/analysis-rules"
+              class="text-sm font-medium text-slate-600 transition hover:text-slate-900"
+              active-class="text-blue-600"
+            >
+              Правила анализа
+            </RouterLink>
+          </nav>
           <div class="hidden text-right sm:block">
             <p class="text-sm font-medium text-slate-900">{{ auth.user.name }}</p>
             <p class="text-sm text-slate-500">{{ auth.user.role_label }}</p>
