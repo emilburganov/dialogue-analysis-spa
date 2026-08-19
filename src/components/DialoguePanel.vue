@@ -8,6 +8,7 @@ import LoadingSpinner from '@/components/LoadingSpinner.vue'
 import MessageBubble from '@/components/MessageBubble.vue'
 import { useAuthStore } from '@/stores/auth'
 import type { DialogueDetail, DialogueResult } from '@/types/dialogue'
+import { ApiValidationError } from '@/utils/apiValidationError'
 
 const route = useRoute()
 const router = useRouter()
@@ -96,9 +97,13 @@ async function handleSendMessage(): Promise<void> {
     dialogue.value.messages.push(message)
     messageBody.value = ''
   } catch (exception) {
-    error.value = exception instanceof Error
-      ? exception.message
-      : 'Не удалось отправить сообщение.'
+    if (exception instanceof ApiValidationError) {
+      error.value = exception.fieldErrors.body?.[0] ?? exception.message
+    } else {
+      error.value = exception instanceof Error
+        ? exception.message
+        : 'Не удалось отправить сообщение.'
+    }
   } finally {
     sending.value = false
   }

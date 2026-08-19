@@ -12,9 +12,10 @@ export class ApiValidationError extends Error {
 
 export function createApiValidationError(payload: ApiError | null): ApiValidationError {
   const fieldErrors = payload?.errors ?? {}
+  const firstFieldMessage = Object.values(fieldErrors).flat()[0]
 
   return new ApiValidationError(
-    payload?.message ?? 'Произошла ошибка при выполнении запроса.',
+    firstFieldMessage ?? payload?.message ?? 'Произошла ошибка при выполнении запроса.',
     fieldErrors,
   )
 }
