@@ -12,9 +12,20 @@ const router = createRouter({
     },
     {
       path: '/',
-      name: 'dashboard',
-      component: () => import('@/views/DashboardView.vue'),
+      component: () => import('@/views/DialoguesLayout.vue'),
       meta: { requiresAuth: true },
+      children: [
+        {
+          path: '',
+          name: 'dialogues',
+          component: { template: '<div />' },
+        },
+        {
+          path: 'dialogues/:id',
+          name: 'dialogue',
+          component: { template: '<div />' },
+        },
+      ],
     },
   ],
 })
@@ -31,7 +42,7 @@ router.beforeEach(async (to) => {
   }
 
   if (to.meta.guest && auth.isAuthenticated) {
-    return { name: 'dashboard' }
+    return { name: 'dialogues' }
   }
 
   return true

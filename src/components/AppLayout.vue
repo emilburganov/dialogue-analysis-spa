@@ -31,7 +31,7 @@ async function handleLogout(): Promise<void> {
         <div v-if="auth.user" class="flex items-center gap-4">
           <div class="hidden text-right sm:block">
             <p class="text-sm font-medium text-slate-900">{{ auth.user.name }}</p>
-            <p class="text-sm text-slate-500">{{ auth.user.email }}</p>
+            <p class="text-sm text-slate-500">{{ auth.user.role_label }}</p>
           </div>
           <button
             type="button"

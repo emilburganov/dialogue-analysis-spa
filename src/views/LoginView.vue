@@ -18,7 +18,7 @@ async function handleSubmit(): Promise<void> {
 
   try {
     await auth.login(form)
-    await router.push({ name: 'dashboard' })
+    await router.push({ name: 'dialogues' })
   } catch (exception) {
     error.value = exception instanceof Error
       ? exception.message
@@ -78,6 +78,17 @@ async function handleSubmit(): Promise<void> {
           {{ auth.loading ? 'Вход...' : 'Войти' }}
         </button>
       </form>
+
+      <div class="mt-8 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+        <p class="mb-2 font-medium text-slate-900">
+          Тестовые аккаунты (пароль: password)
+        </p>
+        <ul class="space-y-1">
+          <li>admin@example.com — администратор</li>
+          <li>anna@example.com — менеджер</li>
+          <li>igor@example.com — клиент</li>
+        </ul>
+      </div>
     </section>
   </div>
 </template>
