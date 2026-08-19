@@ -14,4 +14,8 @@ docker compose up -d --build
 
 Приложение будет доступно на http://localhost
 
+Для входа используйте тестового пользователя из README API:
+- Email: `admin@example.com`
+- Password: `password`
+
 API должен быть запущен отдельно — см. README в `dialogue-analysis-api`.
