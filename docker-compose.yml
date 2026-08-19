@@ -1,0 +1,18 @@
+services:
+  spa:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dialogue-analysis-spa
+    restart: unless-stopped
+    ports:
+      - "80:5173"
+    volumes:
+      - .:/app
+      - spa_node_modules:/app/node_modules
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+
+volumes:
+  spa_node_modules:
+    driver: local
