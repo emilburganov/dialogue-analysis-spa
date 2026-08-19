@@ -2,6 +2,7 @@
 import { ref, watch } from 'vue'
 import { fetchDialogueAnalysis } from '@/api/dialogues'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
+import SeverityBadge from '@/components/SeverityBadge.vue'
 import type { AnalysisEvent, AnalysisSeverity } from '@/types/analysis'
 
 const props = defineProps<{
@@ -13,10 +14,10 @@ const error = ref<string | null>(null)
 const total = ref(0)
 const events = ref<AnalysisEvent[]>([])
 
-const severityStyles: Record<AnalysisSeverity, string> = {
-  high: 'bg-rose-50 text-rose-700 ring-rose-200',
-  medium: 'bg-amber-50 text-amber-800 ring-amber-200',
-  low: 'bg-slate-100 text-slate-700 ring-slate-200',
+const cardAccentStyles: Record<AnalysisSeverity, string> = {
+  high: 'border-l-rose-500',
+  medium: 'border-l-amber-500',
+  low: 'border-l-slate-400',
 }
 
 async function loadAnalysis(): Promise<void> {
@@ -91,15 +92,19 @@ watch(
       <li
         v-for="event in events"
         :key="event.id"
-        class="rounded-xl border border-slate-200 bg-slate-50 p-4"
+        class="rounded-xl border border-slate-200 border-l-4 bg-slate-50 p-4"
+        :class="cardAccentStyles[event.severity]"
       >
-        <div class="flex flex-wrap items-start gap-3">
-          <span
-            class="inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ring-1 ring-inset"
-            :class="severityStyles[event.severity]"
-          >
-            {{ event.severity_label }}
-          </span>
+        <div class="flex flex-wrap items-start gap-x-4 gap-y-2">
+          <div class="flex shrink-0 items-center gap-2">
+            <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Критичность:
+            </span>
+            <SeverityBadge
+              :severity="event.severity"
+              :label="event.severity_label"
+            />
+          </div>
           <div class="min-w-0 flex-1">
             <p class="font-medium text-slate-900">
               {{ event.title }}

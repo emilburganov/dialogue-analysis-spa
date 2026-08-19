@@ -7,6 +7,7 @@ import AnalysisRuleEditModal from '@/components/AnalysisRuleEditModal.vue'
 import AppLayout from '@/components/AppLayout.vue'
 import KeywordsChipsInput from '@/components/KeywordsChipsInput.vue'
 import LoadingSpinner from '@/components/LoadingSpinner.vue'
+import SeverityBadge from '@/components/SeverityBadge.vue'
 import {
   buildCreateRuleSchema,
   buildDefaultCreateFormValues,
@@ -403,7 +404,11 @@ onMounted(() => {
                 <p class="text-slate-900">{{ rule.type_name }}</p>
               </td>
               <td class="px-4 py-4 align-top">
-                {{ rule.default_severity_label }}
+                <SeverityBadge
+                  :severity="rule.default_severity"
+                  :label="rule.default_severity_label"
+                  size="sm"
+                />
               </td>
               <td class="px-4 py-4 align-top">
                 <span
